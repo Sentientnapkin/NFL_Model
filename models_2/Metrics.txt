@@ -1,0 +1,26 @@
+WR
+Tgts - MAE: 0.80, R2: 1.00
+Rec - MAE: 3.00, R2: 0.97
+RecYds - MAE: 8.72, R2: 1.00
+RecTDs - MAE: 1.27, R2: 0.51
+RushAtt - MAE: 2.20, R2: -1.27
+RushYds - MAE: 11.26, R2: 0.26
+RushTD - MAE: 0.17, R2: -0.35
+
+RB
+Tgts - MAE: 0.71, R2: 0.99
+Rec - MAE: 1.08, R2: 0.99
+RecYds - MAE: 5.17, R2: 0.99
+RecTDs - MAE: 0.74, R2: -0.01
+RushAtt - MAE: 2.87, R2: 0.99
+RushYds - MAE: 16.34, R2: 0.98
+RushTD - MAE: 1.25, R2: 0.58
+
+TE
+Tgts - MAE: 2.25, R2: 0.98
+Rec - MAE: 1.66, R2: 0.97
+RecYds - MAE: 19.93, R2: 0.96
+RecTDs - MAE: 1.38, R2: 0.30
+RushAtt - MAE: 1.68, R2: -0.76
+RushYds - MAE: 5.76, R2: -14.16
+RushTD - MAE: 0.11, R2: -0.36

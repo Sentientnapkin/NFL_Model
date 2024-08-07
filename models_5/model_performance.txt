@@ -1,0 +1,24 @@
+
+Performance metrics for WR:
+Tgts - MAE: 1.49, R2: 1.00
+Rec - MAE: 1.51, R2: 0.99
+RecYds - MAE: 11.62, R2: 1.00
+RecTDs - MAE: 0.10, R2: 0.98
+
+
+Performance metrics for RB:
+Tgts - MAE: 1.18, R2: 0.99
+Rec - MAE: 1.06, R2: 0.99
+RecYds - MAE: 9.31, R2: 0.98
+RecTDs - MAE: 0.12, R2: 0.88
+RushAtt - MAE: 4.33, R2: 0.98
+RushYds - MAE: 24.21, R2: 0.97
+RushTD - MAE: 0.26, R2: 0.96
+
+
+Performance metrics for TE:
+Tgts - MAE: 3.36, R2: 0.94
+Rec - MAE: 2.31, R2: 0.95
+RecYds - MAE: 24.08, R2: 0.96
+RecTDs - MAE: 0.19, R2: 0.92
+

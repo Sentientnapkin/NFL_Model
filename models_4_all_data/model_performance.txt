@@ -1,0 +1,90 @@
+
+Performance metrics for WR:
+Tgts - MAE: 1.33, R2: 1.00
+Rec - MAE: 1.00, R2: 0.99
+RecYds - MAE: 11.81, R2: 1.00
+RecTDs - MAE: 1.70, R2: 0.32
+RushAtt - MAE: 2.30, R2: -0.10
+RushYds - MAE: 12.43, R2: 0.07
+RushTD - MAE: 0.18, R2: -0.52
+
+
+Performance metrics for WR:
+Tgts - MAE: 1.31, R2: 1.00
+Rec - MAE: 1.01, R2: 0.99
+RecYds - MAE: 11.36, R2: 1.00
+RecTDs - MAE: 1.76, R2: 0.23
+RushAtt - MAE: 2.31, R2: -0.30
+RushYds - MAE: 13.36, R2: -0.05
+RushTD - MAE: 0.17, R2: -0.68
+
+
+Performance metrics for WR:
+Tgts - MAE: 1.31, R2: 1.00
+Rec - MAE: 1.01, R2: 0.99
+RecYds - MAE: 11.36, R2: 1.00
+RecTDs - MAE: 1.76, R2: 0.23
+RushAtt - MAE: 2.31, R2: -0.30
+RushYds - MAE: 13.36, R2: -0.05
+RushTD - MAE: 0.17, R2: -0.68
+
+
+Performance metrics for WR:
+Tgts - MAE: 1.31, R2: 1.00
+Rec - MAE: 1.01, R2: 0.99
+RecYds - MAE: 11.36, R2: 1.00
+RecTDs - MAE: 1.76, R2: 0.23
+RushAtt - MAE: 2.31, R2: -0.30
+RushYds - MAE: 13.36, R2: -0.05
+RushTD - MAE: 0.17, R2: -0.68
+
+
+Performance metrics for RB:
+Tgts - MAE: 1.42, R2: 0.99
+Rec - MAE: 0.99, R2: 0.98
+RecYds - MAE: 6.65, R2: 0.99
+RecTDs - MAE: 0.87, R2: 0.15
+RushAtt - MAE: 3.97, R2: 0.99
+RushYds - MAE: 18.88, R2: 0.97
+RushTD - MAE: 1.14, R2: 0.74
+
+
+Performance metrics for TE:
+Tgts - MAE: 2.48, R2: 0.98
+Rec - MAE: 2.66, R2: 0.96
+RecYds - MAE: 24.32, R2: 0.96
+RecTDs - MAE: 1.55, R2: 0.05
+RushAtt - MAE: 4.57, R2: -1155.02
+RushYds - MAE: 7.84, R2: -6.70
+RushTD - MAE: 0.15, R2: -0.16
+
+
+Performance metrics for WR:
+Tgts - MAE: 1.66, R2: 0.99
+Rec - MAE: 1.51, R2: 0.98
+RecYds - MAE: 13.18, R2: 1.00
+RecTDs - MAE: 0.13, R2: 0.97
+RushAtt - MAE: 0.98, R2: -0.79
+RushYds - MAE: 3.47, R2: 0.62
+RushTD - MAE: 0.01, R2: 0.93
+
+
+Performance metrics for RB:
+Tgts - MAE: 1.18, R2: 0.99
+Rec - MAE: 1.06, R2: 0.99
+RecYds - MAE: 9.31, R2: 0.98
+RecTDs - MAE: 0.12, R2: 0.88
+RushAtt - MAE: 4.33, R2: 0.98
+RushYds - MAE: 24.21, R2: 0.97
+RushTD - MAE: 0.26, R2: 0.96
+
+
+Performance metrics for TE:
+Tgts - MAE: 4.36, R2: 0.94
+Rec - MAE: 3.47, R2: 0.90
+RecYds - MAE: 29.86, R2: 0.94
+RecTDs - MAE: 0.25, R2: 0.90
+RushAtt - MAE: 1.69, R2: 0.45
+RushYds - MAE: 12.04, R2: -140.63
+RushTD - MAE: 0.25, R2: 0.35
+
