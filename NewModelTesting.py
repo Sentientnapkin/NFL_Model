@@ -8,7 +8,6 @@ import numpy as np
 import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
-from sklearn.feature_selection import SelectFromModel
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.ensemble import StackingRegressor, RandomForestRegressor
