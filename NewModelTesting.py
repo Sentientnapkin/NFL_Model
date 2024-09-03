@@ -1,3 +1,4 @@
+from numba import jit, cuda
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import learning_curve, TimeSeriesSplit
@@ -22,7 +23,7 @@ import joblib
 data = pd.read_csv('NFL Final Data.csv')
 
 all_features = [
-    "Age", "Height (in)", "Weight (lbs)",
+    "Age", "Height (in)", "Weight (lbs)", "G", "GS",
     "RushYds", "RushAtt", "RushTD", "Rec", "RecYds", "RecTDs", "Tgts",
     "YAC", "TotalYards", "TotalTDs", "RZ Completions", "RZ Targets",
     "RZ CompPercent", "RZ Rec TDs", "RZ Rushes", "RZ Rush TDs",
@@ -36,11 +37,12 @@ all_features = [
     "TDperReception", "TDperTarget", "YardsPerRush", "TDperRush",
     "TotalYardsPerTouch", "TotalTDsPerTouch", "TeamPassingYardsPerAttempt",
     "TeamRushingYardsPerAttempt", "TeamPassingTDPercentage",
-    "TeamRushingTDPercentage", "TeamYardsPerPlay", "TeamPointsPerYard"
+    "TeamRushingTDPercentage", "TeamYardsPerPlay", "TeamPointsPerYard",
+    "PPR", "PosRank"
 ]
 
 base_features = [
-    "Age", "Height (in)", "Weight (lbs)",
+    "Age", "Height (in)", "Weight (lbs)", "G", "GS",
     "RushYds", "RushAtt", "RushTD", "Rec", "RecYds", "RecTDs", "Tgts",
     "YAC", "RZ Completions", "RZ Targets",
     "RZ CompPercent", "RZ Rec TDs", "RZ Rushes", "RZ Rush TDs",
@@ -55,7 +57,7 @@ base_features = [
 ]
 
 
-def prepare_training_data(data, position, window_size=4):
+def prepare_training_data(data, position, fantasy, window_size=4):
     position_data = data[data['Position'] == position]
     targets = ['Tgts', 'Rec', 'RecYds', 'RecTDs', 'RushAtt', 'RushYds', 'RushTD']
 
@@ -106,17 +108,26 @@ def prepare_training_data(data, position, window_size=4):
                 season_data = window_data.iloc[i][bf].values
                 X_season.extend(season_data)
 
-            # Use the last season in the window as the target
-            target_season = window_data.iloc[-1][targets].values
+            if fantasy:
+                target_season = window_data.iloc[-1][bf].values
+            else:
+                # Use the last season in the window as the target
+                target_season = window_data.iloc[-1][targets].values
 
             X_list.append(X_season)
             y_list.append(target_season)
 
+
     # Create DataFrames for features and targets
     X = pd.DataFrame(X_list, columns=[f'{feat}_year_{i + 1}' for i in range(window_size) for feat in bf])
-    y = pd.DataFrame(y_list, columns=targets)
+
+    if fantasy:
+        y = pd.DataFrame(y_list, columns=bf)
+    else:
+        y = pd.DataFrame(y_list, columns=targets)
 
     return X, y
+
 
 
 def create_model():
@@ -138,12 +149,11 @@ def create_model():
     multi_output_regressor = MultiOutputRegressor(stacking_regressor)
 
     return Pipeline([
-        ('imputer', SimpleImputer(strategy='mean')),
+        ('imputer', SimpleImputer(strategy='constant', fill_value=-1)),
         ('scaler', StandardScaler()),
-        # ('feature_selection', SelectFromModel(RandomForestRegressor(n_estimators=100))),
-        # ('feature_selection', SelectFromModel(xgb.XGBRegressor(n_estimators=100))),
         ('regressor', multi_output_regressor)
     ])
+
 
 
 def optimize_model(model, X, y):
@@ -158,7 +168,7 @@ def optimize_model(model, X, y):
         'regressor__estimator__final_estimator__learning_rate': Real(0.01, 0.3, prior='log-uniform')
     }
 
-    tscv = TimeSeriesSplit(n_splits=5)
+    tscv = TimeSeriesSplit(n_splits=4)
 
     bayes_search = BayesSearchCV(
         estimator=model,
@@ -186,6 +196,9 @@ def plot_performance_metrics(positions, mae_scores, r2_scores, targets):
     target_lengths = {'WR': 4, 'TE': 4, 'RB': 7}
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 16))
 
+    # make dictionary of position and their targets
+    position_targets = {'WR': ['Tgts', 'Rec', 'RecYds', 'RecTDs'], 'TE': ['Tgts', 'Rec', 'RecYds', 'RecTDs'], 'RB': ['Tgts', 'Rec', 'RecYds', 'RecTDs', 'RushAtt', 'RushYds', 'RushTD']}
+
     width = 0.25
 
     for i, position in enumerate(positions):
@@ -197,10 +210,10 @@ def plot_performance_metrics(positions, mae_scores, r2_scores, targets):
 
         # Set xticks and xticklabels
         ax1.set_xticks(x + (i - (len(positions) - 1) / 2) * width)
-        ax1.set_xticklabels(targets[position], rotation=45, ha='right')
+        ax1.set_xticklabels(position_targets[position], rotation=45, ha='right')
 
         ax2.set_xticks(x + (i - (len(positions) - 1) / 2) * width)
-        ax2.set_xticklabels(targets[position], rotation=45, ha='right')
+        ax2.set_xticklabels(position_targets[position], rotation=45, ha='right')
 
     ax1.set_ylabel('Mean Absolute Error')
     ax1.set_title('MAE by Position and Target')
@@ -258,6 +271,7 @@ def evaluate_and_plot_shap(model, X, y, position):
     for output_index, output_model in enumerate(multi_output_regressor.estimators_):
         # Use the final estimator of the current StackingRegressor
         final_estimator = output_model.final_estimator_
+        print(final_estimator)
 
         # Create a SHAP Explainer for the final estimator
         explainer = shap.Explainer(final_estimator, X)
@@ -265,8 +279,11 @@ def evaluate_and_plot_shap(model, X, y, position):
         # Compute SHAP values for the current output
         shap_values = explainer(X)
 
+        print(shap_values)
+
         # Plot SHAP summary for each target
         for target_index, target in enumerate(y.columns):
+            print(f"Plotting SHAP summary for {target} ({position})")
             plt.figure(figsize=(12, 8))
 
             # Generate a SHAP summary plot
@@ -276,7 +293,6 @@ def evaluate_and_plot_shap(model, X, y, position):
             plt.tight_layout()
 
             # Ensure the 'models' directory exists
-            import os
             if not os.path.exists('models'):
                 os.makedirs('models')
 
@@ -294,7 +310,7 @@ def evaluate_and_plot_shap(model, X, y, position):
 
 
 def evaluate_model(model, X, y):
-    tscv = TimeSeriesSplit(n_splits=5)
+    tscv = TimeSeriesSplit(n_splits=4)
     mae_scores, r2_scores = [], []
 
     for train_index, test_index in tscv.split(X):
@@ -311,6 +327,47 @@ def evaluate_model(model, X, y):
     r2_avg = np.mean(r2_scores, axis=0)
 
     return mae_avg, r2_avg
+
+
+def evaluate_and_plot_fantasy(model, X, y, position):
+    tscv = TimeSeriesSplit(n_splits=4)
+    ppr_true, ppr_pred = [], []
+
+    for train_index, test_index in tscv.split(X):
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+
+        # Evaluate the model based on PPR
+        y_true_ppr = y_test['PPR'].values
+        y_pred_ppr = calculate_fantasy_ppr(y_pred, position)
+
+        ppr_true.extend(y_true_ppr)
+        ppr_pred.extend(y_pred_ppr)
+
+    ppr_mae = mean_absolute_error(ppr_true, ppr_pred)
+    ppr_r2 = r2_score(ppr_true, ppr_pred)
+
+    # Plot the results
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Plot PPR
+    ax.scatter(ppr_true, ppr_pred)
+    ax.plot([min(ppr_true), max(ppr_true)], [min(ppr_true), max(ppr_true)], 'r--')
+    ax.set_xlabel('Actual PPR')
+    ax.set_ylabel('Predicted PPR')
+    ax.set_title(f'{position} PPR: MAE={ppr_mae:.2f}, R2={ppr_r2:.2f}')
+
+    plt.tight_layout()
+    plt.show()
+
+    # Save the plot
+    plt.savefig(f'models/fantasy_evaluation_{position}.png')
+    plt.close()
+
+    return ppr_mae, ppr_r2
 
 
 def predict_with_confidence(model, X, position, n_iterations=1000):
@@ -336,6 +393,7 @@ def predict_with_confidence(model, X, position, n_iterations=1000):
             pd.DataFrame(upper_bound, columns=columns))
 
 
+
 def train_and_save_models(data, positions, model_dir='models'):
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
@@ -350,12 +408,12 @@ def train_and_save_models(data, positions, model_dir='models'):
             print(f"Loading existing model for {position} from disk")
             models[position] = joblib.load(model_path)
             # Load or compute target columns for this position
-            _, y = prepare_training_data(data, position)
+            _, y = prepare_training_data(data, position, False)
             if target_columns is None:
                 target_columns = y.columns
         else:
             print(f"Training model for {position}")
-            X, y = prepare_training_data(data, position)
+            X, y = prepare_training_data(data, position, False)
             if target_columns is None:
                 target_columns = y.columns
 
@@ -370,13 +428,17 @@ def train_and_save_models(data, positions, model_dir='models'):
             save_metrics_to_file(position, mae_avg, r2_avg, y.columns)
 
             # Plot learning curve
-            plot_learning_curve(optimized_model, X, y, cv=TimeSeriesSplit(n_splits=5), position=position)
+            plot_learning_curve(optimized_model, X, y, cv=TimeSeriesSplit(n_splits=4), position=position)
 
             # Feature importance
             feature_importance(optimized_model, X, y, position=position)
 
+            # # Fantasy evaluation
+            # x_fantasy, y_fantasy = prepare_training_data(data, position, True)
+            # evaluate_and_plot_fantasy(optimized_model, x_fantasy, y_fantasy, position=position)
+
             # SHAP analysis
-            evaluate_and_plot_shap(optimized_model, X, y, position=position)
+            # evaluate_and_plot_shap(optimized_model, X, y, position=position)
 
             models[position] = optimized_model
             joblib.dump(optimized_model, model_path)
@@ -500,7 +562,7 @@ def calculate_fantasy_ppr(predicted_player_stats, pos):
         )
 
     else:
-        raise ValueError(f"Invalid position: {position}")
+        raise ValueError(f"Invalid position: {pos}")
 
     # Calculate fantasy points
 
@@ -510,45 +572,4 @@ def calculate_fantasy_ppr(predicted_player_stats, pos):
 # Main execution
 models = {}
 positions = ['WR', 'RB', 'TE']
-train_and_save_models(data, positions)
-
-
-# Example usage with confidence intervals
-new_player_data = pd.DataFrame({
-    'Year': [np.nan, np.nan, 2022, 2023],
-    'Team (Abbr)': [np.nan, np.nan, 'TB', 'TB'],
-    'Age': [np.nan, np.nan, 23, 24],
-    'Height (in)': [np.nan, np.nan, 72, 72],
-    'Weight (lbs)': [np.nan, np.nan, 214, 214],
-    'Tgts': [np.nan, np.nan, 58, 70],
-    'YAC': [np.nan, np.nan, 309, 611],
-    'Rec': [np.nan, np.nan, 50, 64],
-    'RecYds': [np.nan, np.nan, 290, 549],
-    'RecTDs': [np.nan, np.nan, 2, 3],
-    'RushAtt': [np.nan, np.nan, 129, 272],
-    'RushYds': [np.nan, np.nan, 481, 990],
-    'RushTD': [np.nan, np.nan, 1, 6],
-    'RZ Completions': [np.nan, np.nan, 4, 7],
-    'RZ Targets': [np.nan, np.nan, 6, 8],
-    'RZ CompPercent': [np.nan, np.nan, 0.667, 0.8750],
-    'RZ Rec TDs': [np.nan, np.nan, 1, 0],
-    'RZ Rushes': [np.nan, np.nan, 11, 40],
-    'RZ Rush TDs': [np.nan, np.nan, 1, 6]
-})
-
-position = 'RB'
-X_pred = prepare_prediction_data(new_player_data, position)
-mean_pred, lower_bound, upper_bound = predict_with_confidence(models[position], X_pred, position)
-
-fantasy_points_mean = calculate_fantasy_ppr(mean_pred, position)
-mean_pred['Fantasy Points'] = fantasy_points_mean
-
-fantasy_points_lower = calculate_fantasy_ppr(lower_bound, position)
-lower_bound['Fantasy Points'] = fantasy_points_lower
-
-fantasy_points_upper = calculate_fantasy_ppr(upper_bound, position)
-upper_bound['Fantasy Points'] = fantasy_points_upper
-
-print(f"\nPredicted stats for the player's next season (with 95% confidence intervals):")
-for i, target in enumerate(['Tgts', 'Rec', 'RecYds', 'RecTDs', 'RushAtt', 'RushYds', 'RushTD']):
-    print(f"{target}: {mean_pred[0][i]:.2f} ({lower_bound[0][i]:.2f} - {upper_bound[0][i]:.2f})")
+# train_and_save_models(data, positions)

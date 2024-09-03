@@ -25,7 +25,7 @@ import joblib
 data = pd.read_csv('NFL Final Data.csv')
 
 all_features = [
-    "Age", "Height (in)", "Weight (lbs)",
+    "Age", "Height (in)", "Weight (lbs)", "G", "GS",
     "RushYds", "RushAtt", "RushTD", "Rec", "RecYds", "RecTDs", "Tgts",
     "YAC", "TotalYards", "TotalTDs", "RZ Completions", "RZ Targets",
     "RZ CompPercent", "RZ Rec TDs", "RZ Rushes", "RZ Rush TDs",
@@ -43,7 +43,7 @@ all_features = [
 ]
 
 base_features = [
-    "Age", "Height (in)", "Weight (lbs)",
+    "Age", "Height (in)", "Weight (lbs)", "G", "GS",
     "RushYds", "RushAtt", "RushTD", "Rec", "RecYds", "RecTDs", "Tgts",
     "YAC", "RZ Completions", "RZ Targets",
     "RZ CompPercent", "RZ Rec TDs", "RZ Rushes", "RZ Rush TDs",
@@ -136,11 +136,14 @@ def create_nn_model(input_dim):
 
 
 def create_model(input_dim):
+    def create_nn_model_wrapper():
+        return create_nn_model(input_dim)
+
     base_models = [
         ('rf', RandomForestRegressor(n_estimators=100, random_state=42)),
         ('xgb', xgb.XGBRegressor(n_estimators=100, random_state=42)),
         ('lgbm', LGBMRegressor(n_estimators=100, random_state=42)),
-        ('nn', KerasRegressor(model=lambda: create_nn_model(input_dim), epochs=100, batch_size=32, verbose=0))
+        ('nn', KerasRegressor(model=create_nn_model_wrapper, epochs=100, batch_size=32, verbose=0))
     ]
 
     final_estimator = xgb.XGBRegressor(n_estimators=100, random_state=42)
@@ -188,7 +191,7 @@ def optimize_model(model, X, y):
     return bayes_search.best_estimator_
 
 
-def save_metrics_to_file(position, mae_avg, r2_avg, targets, file_path='models/model_performance.txt'):
+def save_metrics_to_file(position, mae_avg, r2_avg, targets, file_path='ensemble_models/model_performance.txt'):
     with open(file_path, 'a') as f:
         f.write(f"\nPerformance metrics for {position}:\n")
         for i, target in enumerate(targets):
@@ -224,7 +227,7 @@ def plot_performance_metrics(positions, mae_scores, r2_scores, targets):
     ax2.legend()
 
     plt.tight_layout()
-    plt.savefig('models/performance_metrics.png')
+    plt.savefig('ensemble_models/performance_metrics.png')
     plt.close()
 
 
@@ -242,7 +245,7 @@ def plot_learning_curve(estimator, X, y, cv, scoring='neg_mean_absolute_error', 
     plt.plot(train_sizes, train_scores_mean, 'o-', color="r", label="Training score")
     plt.plot(train_sizes, test_scores_mean, 'o-', color="g", label="Cross-validation score")
     plt.legend(loc="best")
-    plt.savefig('models/' + f'learning_curve_{position}.png')
+    plt.savefig('ensemble_models/' + f'learning_curve_{position}.png')
     plt.close()
 
 
@@ -257,7 +260,7 @@ def feature_importance(model, X, y, position=''):
     sns.barplot(x='importance', y='feature', data=feature_importance.head(20))
     plt.title(f"Top 20 Feature Importances - {position}")
     plt.tight_layout()
-    plt.savefig('models/' + f'feature_importance_{position}.png')
+    plt.savefig('ensemble_models/' + f'feature_importance_{position}.png')
     plt.close()
 
 
@@ -289,13 +292,12 @@ def evaluate_and_plot_shap(model, X, y, position):
             plt.title(f'SHAP Values for {target} ({position})')
             plt.tight_layout()
 
-            # Ensure the 'models' directory exists
-            import os
-            if not os.path.exists('models'):
-                os.makedirs('models')
+            # Ensure the 'ensemble_models' directory exists
+            if not os.path.exists('ensemble_models'):
+                os.makedirs('ensemble_models')
 
             # Save the plot
-            plt.savefig(f'models/shap_summary_{position}_{target}.png')
+            plt.savefig(f'ensemble_models/shap_summary_{position}_{target}.png')
             plt.close()
 
             # Optional: Plot SHAP summary for all targets combined
@@ -303,12 +305,12 @@ def evaluate_and_plot_shap(model, X, y, position):
             shap.summary_plot(shap_values, X, plot_type="bar")
             plt.title(f'Overall SHAP Values ({position})')
             plt.tight_layout()
-            plt.savefig('models/' + f'shap_summary_{position}_overall.png')
+            plt.savefig('ensemble_models/' + f'shap_summary_{position}_overall.png')
             plt.close()
 
 
 def evaluate_model(model, X, y):
-    tscv = TimeSeriesSplit(n_splits=5)
+    tscv = TimeSeriesSplit(n_splits=4)
     mae_scores, r2_scores = [], []
 
     for train_index, test_index in tscv.split(X):
@@ -326,6 +328,47 @@ def evaluate_model(model, X, y):
 
     return mae_avg, r2_avg
 
+def evaluate_and_plot_fantasy(model, X, y, position):
+    tscv = TimeSeriesSplit(n_splits=4)
+    ppr_true, ppr_pred = [], []
+
+    for train_index, test_index in tscv.split(X):
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+
+        # Evaluate the model based on PPR
+        y_true_ppr = y_test['PPR'].values
+        y_pred_ppr = calculate_fantasy_ppr(y_pred, position)
+        ppr_mae = mean_absolute_error(y_true_ppr, y_pred_ppr)
+        ppr_r2 = r2_score(y_true_ppr, y_pred_ppr)
+
+        ppr_true.extend(y_true_ppr)
+        ppr_pred.extend(y_pred_ppr)
+
+    ppr_mae = mean_absolute_error(ppr_true, ppr_pred)
+    ppr_r2 = r2_score(ppr_true, ppr_pred)
+
+    # Plot the results
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Plot PPR
+    ax.scatter(ppr_true, ppr_pred)
+    ax.plot([min(ppr_true), max(ppr_true)], [min(ppr_true), max(ppr_true)], 'r--')
+    ax.set_xlabel('Actual PPR')
+    ax.set_ylabel('Predicted PPR')
+    ax.set_title(f'{position} PPR: MAE={ppr_mae:.2f}, R2={ppr_r2:.2f}')
+
+    plt.tight_layout()
+    plt.show()
+
+    # Save the plot
+    plt.savefig(f'ensemble_models/fantasy_evaluation_{position}.png')
+    plt.close()
+
+    return ppr_mae, ppr_r2
 
 def predict_with_confidence(model, X, position, n_iterations=1000):
     predictions = []
@@ -350,7 +393,7 @@ def predict_with_confidence(model, X, position, n_iterations=1000):
             pd.DataFrame(upper_bound, columns=columns))
 
 
-def train_and_save_models(data, positions, model_dir='models'):
+def train_and_save_models(data, positions, model_dir='ensemble_models'):
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
@@ -374,6 +417,7 @@ def train_and_save_models(data, positions, model_dir='models'):
                 target_columns = y.columns
 
             input_dim = X.shape[1]
+
             model = create_model(input_dim)
 
             optimized_model = optimize_model(model, X, y)
@@ -385,13 +429,17 @@ def train_and_save_models(data, positions, model_dir='models'):
             save_metrics_to_file(position, mae_avg, r2_avg, y.columns)
 
             # Plot learning curve
-            plot_learning_curve(optimized_model, X, y, cv=TimeSeriesSplit(n_splits=5), position=position)
+            plot_learning_curve(optimized_model, X, y, cv=TimeSeriesSplit(n_splits=4), position=position)
 
             # Feature importance
             feature_importance(optimized_model, X, y, position=position)
 
+            # # Fantasy evaluation
+            # x_fantasy, y_fantasy = prepare_training_data(data, position, True)
+            # evaluate_and_plot_fantasy(optimized_model, x_fantasy, y_fantasy, position=position)
+
             # SHAP analysis
-            evaluate_and_plot_shap(optimized_model, X, y, position=position)
+            # evaluate_and_plot_shap(optimized_model, X, y, position=position)
 
             models[position] = optimized_model
             joblib.dump(optimized_model, model_path)
@@ -515,7 +563,7 @@ def calculate_fantasy_ppr(predicted_player_stats, pos):
         )
 
     else:
-        raise ValueError(f"Invalid position: {position}")
+        raise ValueError(f"Invalid position: {pos}")
 
     # Calculate fantasy points
 
@@ -526,44 +574,3 @@ def calculate_fantasy_ppr(predicted_player_stats, pos):
 models = {}
 positions = ['WR', 'RB', 'TE']
 train_and_save_models(data, positions)
-
-
-# Example usage with confidence intervals
-new_player_data = pd.DataFrame({
-    'Year': [np.nan, np.nan, 2022, 2023],
-    'Team (Abbr)': [np.nan, np.nan, 'TB', 'TB'],
-    'Age': [np.nan, np.nan, 23, 24],
-    'Height (in)': [np.nan, np.nan, 72, 72],
-    'Weight (lbs)': [np.nan, np.nan, 214, 214],
-    'Tgts': [np.nan, np.nan, 58, 70],
-    'YAC': [np.nan, np.nan, 309, 611],
-    'Rec': [np.nan, np.nan, 50, 64],
-    'RecYds': [np.nan, np.nan, 290, 549],
-    'RecTDs': [np.nan, np.nan, 2, 3],
-    'RushAtt': [np.nan, np.nan, 129, 272],
-    'RushYds': [np.nan, np.nan, 481, 990],
-    'RushTD': [np.nan, np.nan, 1, 6],
-    'RZ Completions': [np.nan, np.nan, 4, 7],
-    'RZ Targets': [np.nan, np.nan, 6, 8],
-    'RZ CompPercent': [np.nan, np.nan, 0.667, 0.8750],
-    'RZ Rec TDs': [np.nan, np.nan, 1, 0],
-    'RZ Rushes': [np.nan, np.nan, 11, 40],
-    'RZ Rush TDs': [np.nan, np.nan, 1, 6]
-})
-
-position = 'RB'
-X_pred = prepare_prediction_data(new_player_data, position)
-mean_pred, lower_bound, upper_bound = predict_with_confidence(models[position], X_pred, position)
-
-fantasy_points_mean = calculate_fantasy_ppr(mean_pred, position)
-mean_pred['Fantasy Points'] = fantasy_points_mean
-
-fantasy_points_lower = calculate_fantasy_ppr(lower_bound, position)
-lower_bound['Fantasy Points'] = fantasy_points_lower
-
-fantasy_points_upper = calculate_fantasy_ppr(upper_bound, position)
-upper_bound['Fantasy Points'] = fantasy_points_upper
-
-print(f"\nPredicted stats for the player's next season (with 95% confidence intervals):")
-for i, target in enumerate(['Tgts', 'Rec', 'RecYds', 'RecTDs', 'RushAtt', 'RushYds', 'RushTD']):
-    print(f"{target}: {mean_pred[0][i]:.2f} ({lower_bound[0][i]:.2f} - {upper_bound[0][i]:.2f})")
